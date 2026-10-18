@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Danh sách khách hàng MKT</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5f6b7a;
+    --border: #dde2e8; --accent: #1f6feb; --accent-text: #ffffff;
+    --bad: #c62828; --bad-bg: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111418; --card: #1a1f26; --text: #e6e9ee; --muted: #9aa5b3;
+      --border: #2c333d; --accent: #4c8dff; --accent-text: #0b0d10;
+      --bad: #ff8a80; --bad-bg: #3a1d1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111418; --card: #1a1f26; --text: #e6e9ee; --muted: #9aa5b3;
+    --border: #2c333d; --accent: #4c8dff; --accent-text: #0b0d10;
+    --bad: #ff8a80; --bad-bg: #3a1d1d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; }
+  section { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+            padding: 16px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+                  background: var(--bg); color: var(--text); font: inherit; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; color: var(--text); font-size: 14px; }
+  .check input { width: auto; margin-top: 4px; }
+  button { padding: 9px 16px; border: 0; border-radius: 6px; background: var(--accent);
+           color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .hidden { display: none; }
+  .stats { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  tr.bad td { background: var(--bad-bg); color: var(--bad); }
+  code { font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Thêm danh sách khách hàng MKT</h1>
+  <p class="sub">Tải file khách hàng (tên + số điện thoại). Công cụ tự đổi đầu số <code>0</code> thành <code>84</code> và thêm cột ngày dạng <code>2026-10-11T16:07:00Z</code>. Mọi xử lý chạy ngay trên trình duyệt, không gửi dữ liệu đi đâu.</p>
+
+  <section>
+    <h2>1. Chọn file khách hàng</h2>
+    <input type="file" id="file" accept=".csv,.xlsx,.xls,.txt">
+    <p class="stats" id="fileInfo" style="margin-top:8px">Hỗ trợ CSV, Excel (.xlsx, .xls). Cột tên và cột số điện thoại được nhận diện tự động.</p>
+    <div class="grid hidden" id="colPick">
+      <div><label for="colName">Cột tên</label><select id="colName"></select></div>
+      <div><label for="colPhone">Cột số điện thoại</label><select id="colPhone"></select></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Chọn ngày giờ</h2>
+    <div class="grid">
+      <div>
+        <label for="mode">Cách tạo ngày</label>
+        <select id="mode">
+          <option value="same">Tất cả cùng một ngày giờ</option>
+          <option value="step">Tăng dần theo khoảng cách</option>
+          <option value="random">Ngẫu nhiên trong khoảng</option>
+        </select>
+      </div>
+      <div>
+        <label for="start">Bắt đầu</label>
+        <input type="datetime-local" id="start" step="1">
+      </div>
+      <div id="endBox" class="hidden">
+        <label for="end">Kết thúc</label>
+        <input type="datetime-local" id="end" step="1">
+      </div>
+      <div id="stepBox" class="hidden">
+        <label for="stepVal">Mỗi khách cách nhau</label>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="stepVal" value="1" min="0" style="flex:1">
+          <select id="stepUnit" style="flex:1">
+            <option value="60">phút</option>
+            <option value="3600">giờ</option>
+            <option value="86400" selected>ngày</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="vnTime">
+      <span>Giờ tôi chọn là giờ Việt Nam: tự trừ 7 tiếng để ra giờ UTC (chữ Z). Ví dụ chọn 23:07 → <code>16:07:00Z</code>. Bỏ chọn thì giữ nguyên giờ đã nhập.</span></label>
+    <div class="actions"><button id="run" disabled>Xử lý danh sách</button></div>
+  </section>
+
+  <section id="resultBox" class="hidden">
+    <h2>3. Kết quả</h2>
+    <p class="stats" id="stats"></p>
+    <div class="actions" style="margin:0 0 12px">
+      <button id="dlXlsx">Tải Excel (.xlsx)</button>
+      <button id="dlCsv" class="secondary">Tải CSV</button>
+    </div>
+    <div class="table-wrap"><table id="table"></table></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let rows = [];      // dữ liệu gốc (mảng các dòng, dòng đầu là tiêu đề)
+let result = [];    // [{ten, sdt, ngay, loi}]
+
+// Chuẩn hoá số điện thoại: bỏ ký tự thừa, đổi 0 / +84 thành 84
+function chuanHoaSdt(raw) {
+  let s = String(raw ?? '').trim();
+  if (!s) return { sdt: '', loi: 'Trống' };
+  s = s.replace(/[^\d+]/g, '');
+  if (s.startsWith('+')) s = s.slice(1);
+  if (s.startsWith('0084')) s = s.slice(2);
+  if (s.startsWith('0')) s = '84' + s.slice(1);
+  else if (s.length === 9) s = '84' + s; // Excel làm mất số 0 ở đầu
+  const ok = /^84\d{9}$/.test(s);
+  return { sdt: s, loi: ok ? '' : 'Sai định dạng' };
+}
+
+function timCot(headers, keys) {
+  const norm = h => String(h).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
+  return headers.findIndex(h => keys.some(k => norm(h).includes(k)));
+}
+
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  // CSV đọc dạng chữ UTF-8 để giữ dấu tiếng Việt
+  const wb = /\.(csv|txt)$/i.test(f.name)
+    ? XLSX.read(await f.text(), { type: 'string', raw: true })
+    : XLSX.read(await f.arrayBuffer(), { type: 'array', raw: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
+             .filter(r => r.some(c => String(c).trim() !== ''));
+  if (!rows.length) { $('fileInfo').textContent = 'File trống.'; return; }
+
+  // Nếu dòng đầu chứa số điện thoại thì coi như không có tiêu đề
+  if (rows[0].some(c => /^\+?\d[\d .-]{7,}$/.test(String(c).trim()))) {
+    rows.unshift(rows[0].map((_, i) => 'Cột ' + (i + 1)));
+  }
+  const headers = rows[0];
+  const opts = headers.map((h, i) => `<option value="${i}">${String(h || 'Cột ' + (i + 1)).replace(/</g, '&lt;')}</option>`).join('');
+  $('colName').innerHTML = opts;
+  $('colPhone').innerHTML = opts;
+  let iName = timCot(headers, ['ten', 'name', 'ho va ten', 'khach']);
+  let iPhone = timCot(headers, ['sdt', 'phone', 'dien thoai', 'so dt', 'mobile', 'tel']);
+  if (iPhone < 0) iPhone = headers.length > 1 ? 1 : 0;
+  if (iName < 0 || iName === iPhone) iName = iPhone === 0 ? 1 : 0;
+  $('colName').value = iName;
+  $('colPhone').value = iPhone;
+  $('colPick').classList.remove('hidden');
+  $('fileInfo').textContent = `${f.name}: ${rows.length - 1} khách hàng.`;
+  $('run').disabled = false;
+});
+
+$('mode').addEventListener('change', () => {
+  const m = $('mode').value;
+  $('endBox').classList.toggle('hidden', m !== 'random');
+  $('stepBox').classList.toggle('hidden', m !== 'step');
+});
+
+// Đặt mặc định: hôm nay, giờ hiện tại
+(() => {
+  const d = new Date(); d.setSeconds(0, 0);
+  const pad = n => String(n).padStart(2, '0');
+  const v = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  $('start').value = v;
+  $('end').value = v;
+})();
+
+// Đọc giá trị datetime-local thành số giây, coi như giờ UTC (để không bị lệch theo máy)
+function docNgay(v) {
+  if (!v) return null;
+  const [d, t] = v.split('T');
+  const [y, mo, da] = d.split('-').map(Number);
+  const [h, mi, s = 0] = t.split(':').map(Number);
+  return Date.UTC(y, mo - 1, da, h, mi, s) / 1000;
+}
+const dinhDang = sec => new Date(sec * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+$('run').addEventListener('click', () => {
+  const offset = $('vnTime').checked ? -7 * 3600 : 0;
+  const start = docNgay($('start').value);
+  if (start === null) { alert('Hãy chọn ngày giờ bắt đầu.'); return; }
+  const mode = $('mode').value;
+  let end = start;
+  if (mode === 'random') {
+    end = docNgay($('end').value);
+    if (end === null || end < start) { alert('Ngày kết thúc phải sau ngày bắt đầu.'); return; }
+  }
+  const step = Number($('stepVal').value || 0) * Number($('stepUnit').value);
+  const iName = Number($('colName').value), iPhone = Number($('colPhone').value);
+
+  const data = rows.slice(1).map(r => ({ ten: String(r[iName] ?? '').trim(), ...chuanHoaSdt(r[iPhone]) }));
+  let times = data.map((_, i) =>
+    mode === 'same' ? start :
+    mode === 'step' ? start + i * step :
+    start + Math.floor(Math.random() * (end - start + 1)));
+  if (mode === 'random') times.sort((a, b) => a - b);
+  result = data.map((d, i) => ({ ...d, ngay: dinhDang(times[i] + offset) }));
+
+  const bad = result.filter(r => r.loi).length;
+  $('stats').textContent = `${result.length} khách hàng` + (bad ? ` · ${bad} số cần kiểm tra lại (tô đỏ)` : ' · tất cả số hợp lệ');
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  $('table').innerHTML = '<tr><th>#</th><th>Tên</th><th>Số điện thoại</th><th>Ngày</th><th>Ghi chú</th></tr>' +
+    result.map((r, i) => `<tr class="${r.loi ? 'bad' : ''}"><td>${i + 1}</td><td>${esc(r.ten)}</td><td>${esc(r.sdt)}</td><td>${r.ngay}</td><td>${r.loi}</td></tr>`).join('');
+  $('resultBox').classList.remove('hidden');
+});
+
+function bangXuat() {
+  return [['ten', 'so_dien_thoai', 'ngay'], ...result.map(r => [r.ten, r.sdt, r.ngay])];
+}
+$('dlXlsx').addEventListener('click', () => {
+  const ws = XLSX.utils.aoa_to_sheet(bangXuat());
+  // Ép kiểu chữ để Excel không đổi số điện thoại thành dạng 8.49E+10
+  result.forEach((_, i) => { const c = ws[XLSX.utils.encode_cell({ r: i + 1, c: 1 })]; if (c) { c.t = 's'; c.v = String(c.v); } });
+  ws['!cols'] = [{ wch: 28 }, { wch: 14 }, { wch: 22 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Khach hang');
+  XLSX.writeFile(wb, 'danh_sach_khach_hang_mkt.xlsx');
+});
+$('dlCsv').addEventListener('click', () => {
+  const csv = bangXuat().map(r => r.map(v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'danh_sach_khach_hang_mkt.csv';
+  a.click();
+});
+</script>
+</body>
+</html>

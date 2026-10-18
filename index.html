@@ -124,13 +124,15 @@ let result = [];    // [{ten, sdt, ngay, loi}]
 function chuanHoaSdt(raw) {
   let s = String(raw ?? '').trim();
   if (!s) return { sdt: '', loi: 'Trống' };
+  s = s.replace(/\.0+$/, '');           // Excel lưu số dạng 912345678.0
   s = s.replace(/[^\d+]/g, '');
   if (s.startsWith('+')) s = s.slice(1);
   if (s.startsWith('0084')) s = s.slice(2);
+  let ghiChu = '';
   if (s.startsWith('0')) s = '84' + s.slice(1);
-  else if (s.length === 9) s = '84' + s; // Excel làm mất số 0 ở đầu
+  else if (s.length === 9) { s = '84' + s; ghiChu = 'Thiếu số 0, đã thêm 84'; } // 9 số không có 0 ở đầu
   const ok = /^84\d{9}$/.test(s);
-  return { sdt: s, loi: ok ? '' : 'Sai định dạng' };
+  return { sdt: s, loi: ok ? '' : 'Sai định dạng', ghiChu };
 }
 
 function timCot(headers, keys) {
@@ -216,10 +218,12 @@ $('run').addEventListener('click', () => {
   result = data.map((d, i) => ({ ...d, ngay: dinhDang(times[i] + offset) }));
 
   const bad = result.filter(r => r.loi).length;
-  $('stats').textContent = `${result.length} khách hàng` + (bad ? ` · ${bad} số cần kiểm tra lại (tô đỏ)` : ' · tất cả số hợp lệ');
+  const them84 = result.filter(r => r.ghiChu).length;
+  $('stats').textContent = `${result.length} khách hàng` + (bad ? ` · ${bad} số cần kiểm tra lại (tô đỏ)` : ' · tất cả số hợp lệ')
+    + (them84 ? ` · ${them84} số 9 chữ số đã tự thêm 84` : '');
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   $('table').innerHTML = '<tr><th>#</th><th>Tên</th><th>Số điện thoại</th><th>Ngày</th><th>Ghi chú</th></tr>' +
-    result.map((r, i) => `<tr class="${r.loi ? 'bad' : ''}"><td>${i + 1}</td><td>${esc(r.ten)}</td><td>${esc(r.sdt)}</td><td>${r.ngay}</td><td>${r.loi}</td></tr>`).join('');
+    result.map((r, i) => `<tr class="${r.loi ? 'bad' : ''}"><td>${i + 1}</td><td>${esc(r.ten)}</td><td>${esc(r.sdt)}</td><td>${r.ngay}</td><td>${r.loi || r.ghiChu}</td></tr>`).join('');
   $('resultBox').classList.remove('hidden');
 });
 

@@ -44,6 +44,8 @@
   button:disabled { opacity: .5; cursor: default; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .hidden { display: none; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  details .table-wrap { margin-top: 8px; }
   .stats { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -111,6 +113,7 @@
       <button id="dlXlsx">Tải Excel (.xlsx)</button>
       <button id="dlCsv" class="secondary">Tải CSV</button>
     </div>
+    <details id="removed" style="margin-bottom:12px"></details>
     <div class="table-wrap"><table id="table"></table></div>
   </section>
 </main>
@@ -123,11 +126,13 @@ let result = [];    // [{ten, sdt, ngay, loi}]
 // Chuẩn hoá số điện thoại: bỏ ký tự thừa, đổi 0 / +84 thành 84
 function chuanHoaSdt(raw) {
   let s = String(raw ?? '').trim();
-  if (!s) return { sdt: '', loi: 'Trống' };
   s = s.replace(/\.0+$/, '');           // Excel lưu số dạng 912345678.0
   s = s.replace(/[^\d+]/g, '');
   if (s.startsWith('+')) s = s.slice(1);
   if (s.startsWith('0084')) s = s.slice(2);
+  if (!s) return { bo: 'Không có số điện thoại' };
+  // Số gốc 11 chữ số (ví dụ số cũ 01xx xxx xxxx) thì bỏ, trừ số đã đúng dạng 84xxxxxxxxx
+  if (s.length === 11 && !s.startsWith('84')) return { bo: 'Số 11 chữ số' };
   let ghiChu = '';
   if (s.startsWith('0')) s = '84' + s.slice(1);
   else if (s.length === 9) { s = '84' + s; ghiChu = 'Thiếu số 0, đã thêm 84'; } // 9 số không có 0 ở đầu
@@ -209,7 +214,16 @@ $('run').addEventListener('click', () => {
   const step = Number($('stepVal').value || 0) * Number($('stepUnit').value);
   const iName = Number($('colName').value), iPhone = Number($('colPhone').value);
 
-  const data = rows.slice(1).map(r => ({ ten: String(r[iName] ?? '').trim(), ...chuanHoaSdt(r[iPhone]) }));
+  // Loại dòng không có số, số 11 chữ số và số trùng (giữ dòng xuất hiện đầu tiên)
+  const daCo = new Set(), biBo = [];
+  const data = [];
+  rows.slice(1).forEach((r, i) => {
+    const d = { ten: String(r[iName] ?? '').trim(), goc: String(r[iPhone] ?? '').trim(), dong: i + 2, ...chuanHoaSdt(r[iPhone]) };
+    if (!d.bo && daCo.has(d.sdt)) d.bo = 'Trùng số';
+    if (d.bo) { biBo.push(d); return; }
+    daCo.add(d.sdt);
+    data.push(d);
+  });
   let times = data.map((_, i) =>
     mode === 'same' ? start :
     mode === 'step' ? start + i * step :
@@ -217,11 +231,17 @@ $('run').addEventListener('click', () => {
   if (mode === 'random') times.sort((a, b) => a - b);
   result = data.map((d, i) => ({ ...d, ngay: dinhDang(times[i] + offset) }));
 
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const bad = result.filter(r => r.loi).length;
   const them84 = result.filter(r => r.ghiChu).length;
   $('stats').textContent = `${result.length} khách hàng` + (bad ? ` · ${bad} số cần kiểm tra lại (tô đỏ)` : ' · tất cả số hợp lệ')
     + (them84 ? ` · ${them84} số 9 chữ số đã tự thêm 84` : '');
-  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const dem = ly => biBo.filter(d => d.bo === ly).length;
+  $('removed').innerHTML = biBo.length
+    ? `<summary>Đã loại ${biBo.length} dòng: ${dem('Trùng số')} trùng số, ${dem('Không có số điện thoại')} không có số điện thoại, ${dem('Số 11 chữ số')} số 11 chữ số (bấm để xem)</summary>`
+      + '<div class="table-wrap"><table><tr><th>Dòng</th><th>Tên</th><th>Số gốc</th><th>Lý do</th></tr>'
+      + biBo.map(d => `<tr><td>${d.dong}</td><td>${esc(d.ten)}</td><td>${esc(d.goc)}</td><td>${d.bo}</td></tr>`).join('') + '</table></div>'
+    : '<summary>Không có dòng nào bị loại</summary>';
   $('table').innerHTML = '<tr><th>#</th><th>Tên</th><th>Số điện thoại</th><th>Ngày</th><th>Ghi chú</th></tr>' +
     result.map((r, i) => `<tr class="${r.loi ? 'bad' : ''}"><td>${i + 1}</td><td>${esc(r.ten)}</td><td>${esc(r.sdt)}</td><td>${r.ngay}</td><td>${r.loi || r.ghiChu}</td></tr>`).join('');
   $('resultBox').classList.remove('hidden');

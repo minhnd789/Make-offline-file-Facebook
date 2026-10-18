@@ -4,6 +4,12 @@ Công cụ chuẩn hoá file khách hàng cho marketing:
 
 - Đổi số điện thoại đầu `0` (hoặc `+84`) thành `84`, ví dụ `0912345678` → `84912345678`. Tự bỏ dấu cách, dấu chấm, dấu gạch.
 - Số chỉ có 9 chữ số và không có số `0` ở đầu (thường do Excel làm mất số 0) được mặc định thêm `84`, ví dụ `912345678` → `84912345678`.
+- Tự loại bỏ:
+  - dòng **trùng số điện thoại** (giữ dòng xuất hiện đầu tiên),
+  - dòng **không có số điện thoại**,
+  - số gốc có **11 chữ số** (ví dụ số cũ `01234567890`). Số đã đúng dạng `84xxxxxxxxx` thì vẫn giữ.
+
+  Danh sách các dòng bị loại kèm lý do hiện ngay trên kết quả để bạn đối chiếu.
 - Thêm cột ngày theo định dạng `2026-10-11T16:07:00Z`.
 - Xuất ra Excel (.xlsx) hoặc CSV với 3 cột: `ten`, `so_dien_thoai`, `ngay`.
 
